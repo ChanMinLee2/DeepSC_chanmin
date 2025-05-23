@@ -1,4 +1,3 @@
-
 import pandas as pd
 import numpy as np
 import os
@@ -7,7 +6,6 @@ import torch.nn.functional as F
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 from torch.utils.data import DataLoader, TensorDataset
-import pickle
 
 # CSV 파일이 예상한 컬럼들을 모두 포함하고 있는지 확인
 def is_valid_csv(fpath, expected_columns):
@@ -17,12 +15,11 @@ def is_valid_csv(fpath, expected_columns):
     except:
         return False
 
-# 저장된 pkl 파일에서 TensorDataset 불러오기
-def load_pickle_dataset(pkl_path, batch_size):
-    with open(pkl_path, 'rb') as f:
-        dataset = pickle.load(f)
-    print(f"✅ Loaded {len(dataset)} samples from {pkl_path}")
-    return DataLoader(dataset, batch_size=batch_size, shuffle=False)
+# 저장된 pt 파일에서 TensorDataset 불러오기
+def load_pt_dataset(pt_path, batch_size):
+    data = torch.load(pt_path)
+    print(f"✅ Loaded {data.shape[0]} samples from {pt_path}")
+    return DataLoader(TensorDataset(data), batch_size=batch_size, shuffle=False)
 
 # 폴더 내 모든 유효한 CSV 파일을 로드하고 패딩 후 텐서로 변환 (모든 시퀀스를 max 길이에 맞춤)
 def load_all_valid_csv_tensors(folder_path, feature_cols, batch_size=8, save_split_path=None, split_ratio=0.8):
@@ -65,18 +62,16 @@ def load_all_valid_csv_tensors(folder_path, feature_cols, batch_size=8, save_spl
 
     full_tensor = torch.cat(padded_tensors, dim=0)  # [N, T, D]
 
-    # 학습/테스트 분할 및 저장
+    # 학습/테스트 분할 및 저장 (.pt 파일로)
     if save_split_path:
         N = full_tensor.shape[0]
         train_len = int(N * split_ratio)
         test_len = N - train_len
         train_data = full_tensor[:train_len]
         test_data = full_tensor[train_len:]
-        with open(os.path.join(save_split_path, 'train_data.pkl'), 'wb') as f:
-            pickle.dump(TensorDataset(train_data), f)
-        with open(os.path.join(save_split_path, 'test_data.pkl'), 'wb') as f:
-            pickle.dump(TensorDataset(test_data), f)
-        print(f"✅ Saved train_data.pkl ({train_len} samples), test_data.pkl ({test_len} samples) to {save_split_path}")
+        torch.save(train_data, os.path.join(save_split_path, 'train_data.pt'))
+        torch.save(test_data, os.path.join(save_split_path, 'test_data.pt'))
+        print(f"✅ Saved train_data.pt ({train_len} samples), test_data.pt ({test_len} samples) to {save_split_path}")
 
     dataset = TensorDataset(full_tensor)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
@@ -118,6 +113,7 @@ def run_deepsc_forward(deepsc_model, dataloader, device):
     return outputs
 
 
+
 feature_cols = [
     'Voltage_measured', 'Current_measured', 'Temperature_measured',
     'Current_load', 'Voltage_load', 'Time'
@@ -131,12 +127,9 @@ load_all_valid_csv_tensors(
     split_ratio=0.8
 )
 
-train_loader = load_pickle_dataset('./preprocessed_data/train_data.pkl', batch_size=8)
-test_loader = load_pickle_dataset('./preprocessed_data/test_data.pkl', batch_size=8)
+# train_loader = load_pt_dataset('./preprocessed_data/train_data.pt', batch_size=8)
+# test_loader = load_pt_dataset('./preprocessed_data/test_data.pt', batch_size=8)
 
-print(len(train_loader))  # ✅ 배치 개수 출력
-
-for batch in train_loader:
-    print(batch[0].shape)  # [B, T, D]
-    break
-
+# for batch in train_loader:
+    # print(batch[0].shape)
+    # break
