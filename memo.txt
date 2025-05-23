@@ -1,0 +1,2 @@
+// cuda +cuDNN 재설치 및 적용
+https://velog.io/@ksy5098/Window%EC%97%90%EC%84%9C-CUDA-11.8-cuDNN-8.7.0-%EC%84%A4%EC%B9%98

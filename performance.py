@@ -20,11 +20,12 @@ from sklearn.preprocessing import normalize
 # from bert4keras.models import build_bert_model
 # from bert4keras.tokenizers import Tokenizer
 from w3lib.html import remove_tags
+import pdb
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data-dir', default='europarl/train_data.pkl', type=str)
+parser.add_argument('--data-dir', default='europarl/test_data.pkl', type=str)
 parser.add_argument('--vocab-file', default='europarl/vocab.json', type=str)
-parser.add_argument('--checkpoint-path', default='checkpoints/deepsc-Rayleigh', type=str)
+parser.add_argument('--checkpoint-path', default='checkpoints/deepsc-Rayleigh2', type=str)
 parser.add_argument('--channel', default='Rayleigh', type=str)
 parser.add_argument('--MAX-LENGTH', default=30, type=int)
 parser.add_argument('--MIN-LENGTH', default=4, type=int)
@@ -39,69 +40,69 @@ parser.add_argument('--bert-checkpoint-path', default='bert/cased_L-12_H-768_A-1
 parser.add_argument('--bert-dict-path', default='bert/cased_L-12_H-768_A-12/vocab.txt', type = str)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+print(torch.__version__)  # PyTorch 버전 확인
+print(torch.version.cuda)  # PyTorch에서 사용하는 CUDA 버전 확인
 
 # using pre-trained model to compute the sentence similarity
-# class Similarity():
-#     def __init__(self, config_path, checkpoint_path, dict_path):
-#         self.model1 = build_bert_model(config_path, checkpoint_path, with_pool=True)
-#         self.model = keras.Model(inputs=self.model1.input,
-#                                  outputs=self.model1.get_layer('Encoder-11-FeedForward-Norm').output)
-#         # build tokenizer
-#         self.tokenizer = Tokenizer(dict_path, do_lower_case=True)
-#
-#     def compute_similarity(self, real, predicted):
-#         token_ids1, segment_ids1 = [], []
-#         token_ids2, segment_ids2 = [], []
-#         score = []
-#
-#         for (sent1, sent2) in zip(real, predicted):
-#             sent1 = remove_tags(sent1)
-#             sent2 = remove_tags(sent2)
-#
-#             ids1, sids1 = self.tokenizer.encode(sent1)
-#             ids2, sids2 = self.tokenizer.encode(sent2)
-#
-#             token_ids1.append(ids1)
-#             token_ids2.append(ids2)
-#             segment_ids1.append(sids1)
-#             segment_ids2.append(sids2)
-#
-#         token_ids1 = keras.preprocessing.sequence.pad_sequences(token_ids1, maxlen=32, padding='post')
-#         token_ids2 = keras.preprocessing.sequence.pad_sequences(token_ids2, maxlen=32, padding='post')
-#
-#         segment_ids1 = keras.preprocessing.sequence.pad_sequences(segment_ids1, maxlen=32, padding='post')
-#         segment_ids2 = keras.preprocessing.sequence.pad_sequences(segment_ids2, maxlen=32, padding='post')
-#
-#         vector1 = self.model.predict([token_ids1, segment_ids1])
-#         vector2 = self.model.predict([token_ids2, segment_ids2])
-#
-#         vector1 = np.sum(vector1, axis=1)
-#         vector2 = np.sum(vector2, axis=1)
-#
-#         vector1 = normalize(vector1, axis=0, norm='max')
-#         vector2 = normalize(vector2, axis=0, norm='max')
-#
-#         dot = np.diag(np.matmul(vector1, vector2.T))  # a*b
-#         a = np.diag(np.matmul(vector1, vector1.T))  # a*a
-#         b = np.diag(np.matmul(vector2, vector2.T))
-#
-#         a = np.sqrt(a)
-#         b = np.sqrt(b)
-#
-#         output = dot / (a * b)
-#         score = output.tolist()
-#
-#         return score
+class Similarity():
+    def __init__(self, config_path, checkpoint_path, dict_path):
+        self.model1 = build_bert_model(config_path, checkpoint_path, with_pool=True)
+        self.model = keras.Model(inputs=self.model1.input,
+                                 outputs=self.model1.get_layer('Encoder-11-FeedForward-Norm').output)
+        # build tokenizer
+        self.tokenizer = Tokenizer(dict_path, do_lower_case=True)
+
+    def compute_similarity(self, real, predicted):
+        token_ids1, segment_ids1 = [], []
+        token_ids2, segment_ids2 = [], []
+        score = []
+
+        for (sent1, sent2) in zip(real, predicted):
+            sent1 = remove_tags(sent1)
+            sent2 = remove_tags(sent2)
+
+            ids1, sids1 = self.tokenizer.encode(sent1)
+            ids2, sids2 = self.tokenizer.encode(sent2)
+
+            token_ids1.append(ids1)
+            token_ids2.append(ids2)
+            segment_ids1.append(sids1)
+            segment_ids2.append(sids2)
+
+        token_ids1 = keras.preprocessing.sequence.pad_sequences(token_ids1, maxlen=32, padding='post')
+        token_ids2 = keras.preprocessing.sequence.pad_sequences(token_ids2, maxlen=32, padding='post')
+
+        segment_ids1 = keras.preprocessing.sequence.pad_sequences(segment_ids1, maxlen=32, padding='post')
+        segment_ids2 = keras.preprocessing.sequence.pad_sequences(segment_ids2, maxlen=32, padding='post')
+
+        vector1 = self.model.predict([token_ids1, segment_ids1])
+        vector2 = self.model.predict([token_ids2, segment_ids2])
+
+        vector1 = np.sum(vector1, axis=1)
+        vector2 = np.sum(vector2, axis=1)
+
+        vector1 = normalize(vector1, axis=0, norm='max')
+        vector2 = normalize(vector2, axis=0, norm='max')
+
+        dot = np.diag(np.matmul(vector1, vector2.T))  # a*b
+        a = np.diag(np.matmul(vector1, vector1.T))  # a*a
+        b = np.diag(np.matmul(vector2, vector2.T))
+
+        a = np.sqrt(a)
+        b = np.sqrt(b)
+
+        output = dot / (a * b)
+        score = output.tolist()
+
+        return score
 
 
 def performance(args, SNR, net):
     # similarity = Similarity(args.bert_config_path, args.bert_checkpoint_path, args.bert_dict_path)
     bleu_score_1gram = BleuScore(1, 0, 0, 0)
-
     test_eur = EurDataset('test')
     test_iterator = DataLoader(test_eur, batch_size=args.batch_size, num_workers=0,
-                               pin_memory=True, collate_fn=collate_data)
+                               pin_memory=True, collate_fn=collate_data)    
 
     StoT = SeqtoText(token_to_idx, end_idx)
     score = []
@@ -111,6 +112,7 @@ def performance(args, SNR, net):
         for epoch in range(args.epochs):
             Tx_word = []
             Rx_word = []
+            pdb.set_trace()
 
             for snr in tqdm(SNR):
                 word = []
@@ -134,9 +136,11 @@ def performance(args, SNR, net):
                     result_string = list(map(StoT.sequence_to_text, target_sent))
                     target_word = target_word + result_string
 
+                # pdb.set_trace()
                 Tx_word.append(word)
                 Rx_word.append(target_word)
 
+            # pdb.set_trace()
             bleu_score = []
             sim_score = []
             for sent1, sent2 in zip(Tx_word, Rx_word):
@@ -160,7 +164,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     SNR = [0,3,6,9,12,15,18]
 
-    args.vocab_file = '/import/antennas/Datasets/hx301/' + args.vocab_file
+    # args.vocab_file = '/import/antennas/Datasets/hx301/' + args.vocab_file
+    args.vocab_file = 'C:/Users/ksshin/Desktop/ChanMinLee/DeepSC/DeepSC/' + args.vocab_file
     vocab = json.load(open(args.vocab_file, 'rb'))
     token_to_idx = vocab['token_to_idx']
     idx_to_token = dict(zip(token_to_idx.values(), token_to_idx.keys()))

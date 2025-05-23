@@ -22,6 +22,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Function
 import math
+import pdb
 
 
 class PositionalEncoding(nn.Module):
@@ -204,6 +205,7 @@ class Encoder(nn.Module):
                                             for _ in range(num_layers)])
         
     def forward(self, x, src_mask):
+        
         "Pass the input (and mask) through each layer in turn."
         # the input size of x is [batch_size, seq_len]
         x = self.embedding(x) * math.sqrt(self.d_model)

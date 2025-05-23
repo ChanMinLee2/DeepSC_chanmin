@@ -17,3 +17,10 @@ checkpoints/
 /checkpoints/deepsc-mi-awgn/*
 /checkpoints/deepsc-mi/Rayleigh/*
 /checkpoints/deepsc-Rayleigh/* 
+
+europarl
+/europarl/*
+data
+cleaned_dataset
+preprocessed_data
+*.tgz

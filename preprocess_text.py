@@ -20,6 +20,7 @@ import argparse
 import os
 import json
 from tqdm import tqdm
+import pdb
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--input-data-dir', default='europarl/en', type=str)
@@ -143,7 +144,8 @@ def decode(seq_idx, idx_to_token, delim=None, stop_at_end=True):
 
 
 def main(args):
-    data_dir = '/import/antennas/Datasets/hx301/'
+    # data_dir = '/import/antennas/Datasets/hx301/'
+    data_dir = 'C:/Users/ksshin/Desktop/ChanMinLee/DeepSC/DeepSC/'
     args.input_data_dir = data_dir + args.input_data_dir
     args.output_train_dir = data_dir + args.output_train_dir
     args.output_test_dir = data_dir + args.output_test_dir
@@ -191,6 +193,8 @@ def main(args):
     print('Writing Data')
     train_data = results[: round(len(results) * 0.9)]
     test_data = results[round(len(results) * 0.9):]
+
+    pdb.set_trace()
 
     with open(args.output_train_dir, 'wb') as f:
         pickle.dump(train_data, f)

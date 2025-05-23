@@ -11,6 +11,7 @@ import json
 import torch
 import random
 import torch.nn as nn
+import torch
 import numpy as np
 from utils import SNR_to_noise, initNetParams, train_step, val_step, train_mi
 from dataset import EurDataset, collate_data
@@ -18,11 +19,13 @@ from models.transceiver import DeepSC
 from models.mutual_info import Mine
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import pdb
 
 parser = argparse.ArgumentParser()
 #parser.add_argument('--data-dir', default='data/train_data.pkl', type=str)
 parser.add_argument('--vocab-file', default='europarl/vocab.json', type=str)
-parser.add_argument('--checkpoint-path', default='checkpoints/deepsc-Rayleigh', type=str)
+# parser.add_argument('--checkpoint-path', default='checkpoints/deepsc-Rayleigh', type=str)
+parser.add_argument('--checkpoint-path', default='checkpoints/deepsc-Rayleigh2', type=str)
 parser.add_argument('--channel', default='Rayleigh', type=str, help = 'Please choose AWGN, Rayleigh, and Rician')
 parser.add_argument('--MAX-LENGTH', default=30, type=int)
 parser.add_argument('--MIN-LENGTH', default=4, type=int)
@@ -33,7 +36,8 @@ parser.add_argument('--num-heads', default=8, type=int)
 parser.add_argument('--batch-size', default=128, type=int)
 parser.add_argument('--epochs', default=80, type=int)
 
-
+print(torch.__version__)  # PyTorch 버전 확인
+print(torch.version.cuda)  # PyTorch에서 사용하는 CUDA 버전 확인
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def setup_seed(seed):
@@ -77,7 +81,9 @@ def train(epoch, args, net, mi_net=None):
     for sents in pbar:
         sents = sents.to(device)
 
-        if mi_net is not None:
+        # print(f"Input shape: {sents.shape}")  # Input 데이터의 형태를 출력
+
+        if mi_net is not None: # mutual info. model이 존재하는 경우
             mi = train_mi(net, mi_net, sents, 0.1, pad_idx, mi_opt, args.channel)
             loss = train_step(net, sents, sents, 0.1, pad_idx,
                               optimizer, criterion, args.channel, mi_net)
@@ -99,7 +105,8 @@ def train(epoch, args, net, mi_net=None):
 if __name__ == '__main__':
     # setup_seed(10)
     args = parser.parse_args()
-    args.vocab_file = '/import/antennas/Datasets/hx301/' + args.vocab_file
+    # args.vocab_file = '/import/antennas/Datasets/hx301/' + args.vocab_file
+    args.vocab_file = 'C:/Users/ksshin/Desktop/ChanMinLee/DeepSC/DeepSC/' + args.vocab_file
     """ preparing the dataset """
     vocab = json.load(open(args.vocab_file, 'rb'))
     token_to_idx = vocab['token_to_idx']
@@ -108,6 +115,7 @@ if __name__ == '__main__':
     start_idx = token_to_idx["<START>"]
     end_idx = token_to_idx["<END>"]
 
+    pdb.set_trace()
 
     """ define optimizer and loss function """
     deepsc = DeepSC(args.num_layers, num_vocab, num_vocab,
@@ -119,6 +127,7 @@ if __name__ == '__main__':
                                  lr=1e-4, betas=(0.9, 0.98), eps=1e-8, weight_decay = 5e-4)
     mi_opt = torch.optim.Adam(mi_net.parameters(), lr=1e-3)
     #opt = NoamOpt(args.d_model, 1, 4000, optimizer)
+    pdb.set_trace()
     initNetParams(deepsc)
     for epoch in range(args.epochs):
         start = time.time()
