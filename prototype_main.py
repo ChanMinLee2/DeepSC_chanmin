@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout=0.1, max_len=1000):
@@ -59,7 +60,21 @@ class DeepSCForTimeSeries(nn.Module):
         x = self.output_fc(x)          # [B, T, D]
         return x
 
-# ✅ 학습 및 복원 예시 루프
+def visualize_reconstruction(original, restored, sample_idx):
+    """original/restored: [T, D] np.array"""
+    plt.figure(figsize=(12, 6))
+    num_features = original.shape[1]
+    for i in range(num_features):
+        plt.subplot(num_features, 1, i + 1)
+        plt.plot(original[:, i], label='Original', linestyle='--')
+        plt.plot(restored[:, i], label='Restored', alpha=0.7)
+        plt.title(f'Feature {i}')
+        if i == 0:
+            plt.legend()
+    plt.tight_layout()
+    plt.savefig(f'./reconstructed/compare_sample{sample_idx}.png')
+    plt.close()
+
 if __name__ == '__main__':
     import os
     import pandas as pd
@@ -69,17 +84,44 @@ if __name__ == '__main__':
     model = DeepSCForTimeSeries(input_dim=6, d_model=128).to(device)
 
     train_loader = load_pt_dataset('./preprocessed_data/train_data.pt', batch_size=8)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    criterion = nn.MSELoss()
 
+    # ✅ 학습 루프
+    model.train()
+    num_epochs = 5
+    for epoch in range(num_epochs):
+        total_loss = 0
+        for batch in tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}"):
+            x = batch[0].to(device)
+            optimizer.zero_grad()
+            output = model(x)
+            loss = criterion(output, x)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+        print(f"Epoch {epoch+1} Loss: {total_loss:.4f}")
+
+    # ✅ 복원 결과 저장 및 시각화
     model.eval()
     with torch.no_grad():
-        for i, batch in enumerate(tqdm(train_loader, desc="Reconstructing CSV batches")):
-            x = batch[0].to(device)  # [B, T, D]
-            output = model(x)        # 복원 결과
+        os.makedirs('./reconstructed', exist_ok=True)
+        count = 0
+        for batch in train_loader:
+            x = batch[0].to(device)
+            output = model(x)
+            for b in range(min(3 - count, x.size(0))):
+                original = x[b].cpu().numpy()   # [T, D]
+                restored = output[b].cpu().numpy()
 
-            # ✅ 복원된 배치 첫 샘플을 CSV로 저장
-            restored = output[0].cpu().numpy()  # [T, D]
-            df = pd.DataFrame(restored, columns=[f'feature_{j}' for j in range(restored.shape[1])])
-            os.makedirs('./reconstructed', exist_ok=True)
-            df.to_csv(f'./reconstructed/restored_batch{i}_sample0.csv', index=False)
+                df = pd.DataFrame(restored, columns=[f'feature_{j}' for j in range(restored.shape[1])])
+                df.to_csv(f'./reconstructed/restored_sample{count}.csv', index=False)
 
-            if i >= 2: break  # 예시로 3개만 저장
+                visualize_reconstruction(original, restored, count)
+
+                count += 1
+                if count >= 3:
+                    break
+            if count >= 3:
+                break
+        print("✅ 복원된 샘플 3개 저장 및 시각화 완료")

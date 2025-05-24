@@ -24,3 +24,4 @@ data
 cleaned_dataset
 preprocessed_data
 *.tgz
+*.csv
