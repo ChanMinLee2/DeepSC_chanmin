@@ -2,8 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-
-from preprocess_time_series import load_pt_dataset
+from tqdm import tqdm
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout=0.1, max_len=1000):
@@ -55,20 +54,32 @@ class DeepSCForTimeSeries(nn.Module):
         x = self.input_fc(x)           # [B, T, d_model]
         x = self.pos_encoder(x)        # [B, T, d_model]
         x = self.encoder(x)            # [B, T, d_model]
-        x = self.channel_encoder(x)   # [B, T, d_model]
-        x = self.channel_decoder(x)   # [B, T, d_model]
-        x = self.output_fc(x)         # [B, T, D]
+        x = self.channel_encoder(x)    # [B, T, d_model]
+        x = self.channel_decoder(x)    # [B, T, d_model]
+        x = self.output_fc(x)          # [B, T, D]
         return x
 
-model = DeepSCForTimeSeries(input_dim=6, d_model=128)
+# ✅ 학습 및 복원 예시 루프
+if __name__ == '__main__':
+    import os
+    import pandas as pd
+    from preprocess_time_series import load_pt_dataset
 
-train_loader = load_pt_dataset('./preprocessed_data/train_data.pt', batch_size=8)
-# test_loader = load_pt_dataset('./preprocessed_data/test_data.pt', batch_size=8)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = DeepSCForTimeSeries(input_dim=6, d_model=128).to(device)
 
-for batch in train_loader:
-    x = batch[0]  # TensorDataset이므로 첫 항목만 사용
-    output = model(x)
-    print("입력:", x.shape, "→ 출력:", output.shape)
-    break  # 예시로 한 배치만 처리
+    train_loader = load_pt_dataset('./preprocessed_data/train_data.pt', batch_size=8)
 
-print(x, output)
+    model.eval()
+    with torch.no_grad():
+        for i, batch in enumerate(tqdm(train_loader, desc="Reconstructing CSV batches")):
+            x = batch[0].to(device)  # [B, T, D]
+            output = model(x)        # 복원 결과
+
+            # ✅ 복원된 배치 첫 샘플을 CSV로 저장
+            restored = output[0].cpu().numpy()  # [T, D]
+            df = pd.DataFrame(restored, columns=[f'feature_{j}' for j in range(restored.shape[1])])
+            os.makedirs('./reconstructed', exist_ok=True)
+            df.to_csv(f'./reconstructed/restored_batch{i}_sample0.csv', index=False)
+
+            if i >= 2: break  # 예시로 3개만 저장
