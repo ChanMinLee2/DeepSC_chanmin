@@ -75,6 +75,19 @@ def visualize_reconstruction(original, restored, sample_idx):
     plt.savefig(f'./reconstructed/compare_sample{sample_idx}.png')
     plt.close()
 
+def add_gaussian_noise(tensor, std=0.05):
+    noise = torch.randn_like(tensor) * std
+    return tensor + noise
+
+def randomly_mask_segments(tensor, drop_ratio=0.1):
+    B, T, D = tensor.shape
+    mask = torch.ones_like(tensor)
+    for b in range(B):
+        start = torch.randint(0, T - int(T * drop_ratio), (1,))
+        end = start + int(T * drop_ratio)
+        mask[b, start:end, :] = 0
+    return tensor * mask
+
 if __name__ == '__main__':
     import os
     import pandas as pd
@@ -94,8 +107,13 @@ if __name__ == '__main__':
         total_loss = 0
         for batch in tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}"):
             x = batch[0].to(device)
+
+            # 🔹 노이즈 삽입 (가우시안 또는 마스킹 중 택 1)
+            x_noised = add_gaussian_noise(x)
+            # x_noised = randomly_mask_segments(x)  # 필요시 교체 가능
+
             optimizer.zero_grad()
-            output = model(x)
+            output = model(x_noised)
             loss = criterion(output, x)
             loss.backward()
             optimizer.step()
