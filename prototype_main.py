@@ -4,6 +4,11 @@ import torch.nn.functional as F
 import math
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import numpy as np
+
+import os
+import pandas as pd
+from preprocess_time_series import load_pt_dataset
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout=0.1, max_len=1000):
@@ -23,7 +28,7 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 class DeepSCForTimeSeries(nn.Module):
-    def __init__(self, input_dim, d_model=128, num_heads=4, num_layers=2, d_ff=256, dropout=0.1):
+    def __init__(self, input_dim, compressed_dim=32, d_model=128, num_heads=4, num_layers=2, d_ff=256, dropout=0.1):
         super().__init__()
         self.input_fc = nn.Linear(input_dim, d_model)
         self.pos_encoder = PositionalEncoding(d_model, dropout)
@@ -40,22 +45,24 @@ class DeepSCForTimeSeries(nn.Module):
         self.channel_encoder = nn.Sequential(
             nn.Linear(d_model, 64),
             nn.ReLU(),
-            nn.Linear(64, d_model)
+            nn.Linear(64, compressed_dim)  # compression here
         )
 
         self.channel_decoder = nn.Sequential(
-            nn.Linear(d_model, 64),
+            nn.Linear(compressed_dim, 64),
             nn.ReLU(),
             nn.Linear(64, d_model)
         )
 
         self.output_fc = nn.Linear(d_model, input_dim)
+        self.compressed_dim = compressed_dim
+        self.d_model = d_model
 
     def forward(self, x):  # x: [B, T, D]
         x = self.input_fc(x)           # [B, T, d_model]
         x = self.pos_encoder(x)        # [B, T, d_model]
         x = self.encoder(x)            # [B, T, d_model]
-        x = self.channel_encoder(x)    # [B, T, d_model]
+        x = self.channel_encoder(x)    # [B, T, compressed_dim]
         x = self.channel_decoder(x)    # [B, T, d_model]
         x = self.output_fc(x)          # [B, T, D]
         return x
@@ -75,26 +82,14 @@ def visualize_reconstruction(original, restored, sample_idx):
     plt.savefig(f'./reconstructed/compare_sample{sample_idx}.png')
     plt.close()
 
-def add_gaussian_noise(tensor, std=0.05):
-    noise = torch.randn_like(tensor) * std
-    return tensor + noise
-
-def randomly_mask_segments(tensor, drop_ratio=0.1):
-    B, T, D = tensor.shape
-    mask = torch.ones_like(tensor)
-    for b in range(B):
-        start = torch.randint(0, T - int(T * drop_ratio), (1,))
-        end = start + int(T * drop_ratio)
-        mask[b, start:end, :] = 0
-    return tensor * mask
+def add_gaussian_noise(x, std=0.05):
+    noise = torch.randn_like(x) * std
+    return x + noise
 
 if __name__ == '__main__':
-    import os
-    import pandas as pd
-    from preprocess_time_series import load_pt_dataset
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = DeepSCForTimeSeries(input_dim=6, d_model=128).to(device)
+    model = DeepSCForTimeSeries(input_dim=6, compressed_dim=16, d_model=128).to(device)
 
     train_loader = load_pt_dataset('./preprocessed_data/train_data.pt', batch_size=8)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
@@ -107,11 +102,7 @@ if __name__ == '__main__':
         total_loss = 0
         for batch in tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}"):
             x = batch[0].to(device)
-
-            # 🔹 노이즈 삽입 (가우시안 또는 마스킹 중 택 1)
             x_noised = add_gaussian_noise(x)
-            # x_noised = randomly_mask_segments(x)  # 필요시 교체 가능
-
             optimizer.zero_grad()
             output = model(x_noised)
             loss = criterion(output, x)
@@ -127,7 +118,8 @@ if __name__ == '__main__':
         count = 0
         for batch in train_loader:
             x = batch[0].to(device)
-            output = model(x)
+            x_noised = add_gaussian_noise(x)
+            output = model(x_noised)
             for b in range(min(3 - count, x.size(0))):
                 original = x[b].cpu().numpy()   # [T, D]
                 restored = output[b].cpu().numpy()
@@ -142,4 +134,6 @@ if __name__ == '__main__':
                     break
             if count >= 3:
                 break
-        print("✅ 복원된 샘플 3개 저장 및 시각화 완료")
+        compression_ratio = model.compressed_dim / model.d_model
+        print(f"✅ 복원된 샘플 3개 저장 및 시각화 완료")
+        print(f"📉 압축 비율: {compression_ratio:.2f} (from {model.d_model} → {model.compressed_dim})")
