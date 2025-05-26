@@ -29,10 +29,23 @@ class DeepSCForTimeSeries(nn.Module):
         super().__init__()
         self.input_fc = nn.Linear(input_dim, d_model)
         self.pos_encoder = PositionalEncoding(d_model, dropout)
-        encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=num_heads, dim_feedforward=d_ff, dropout=dropout, batch_first=True)
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model, 
+            nhead=num_heads, 
+            dim_feedforward=d_ff, 
+            dropout=dropout, 
+            batch_first=True)
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-        self.channel_encoder = nn.Sequential(nn.Linear(d_model, 64), nn.ReLU(), nn.Linear(64, compressed_dim))
-        self.channel_decoder = nn.Sequential(nn.Linear(compressed_dim, 64), nn.ReLU(), nn.Linear(64, d_model))
+        self.channel_encoder = nn.Sequential(
+            nn.Linear(d_model, 64), 
+            nn.ReLU(), 
+            nn.Linear(64, compressed_dim)
+        )
+        self.channel_decoder = nn.Sequential(
+            nn.Linear(compressed_dim, 64), 
+            nn.ReLU(), 
+            nn.Linear(64, d_model)
+        )
         self.output_fc = nn.Linear(d_model, input_dim)
         self.compressed_dim = compressed_dim
         self.d_model = d_model
